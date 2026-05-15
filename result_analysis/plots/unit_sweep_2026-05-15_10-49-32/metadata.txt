@@ -1,0 +1,15 @@
+{
+  "results_file": "/Users/danielarturi/Desktop/Quantum/QuantumClean/result_bank/simulated_solver_results/UnitExperiment_1.json",
+  "date": "2026-05-11",
+  "time": "14:01:39",
+  "total_cases": 400,
+  "num_reads": 1000,
+  "num_sweeps": 1000,
+  "solvers": [
+    "ILP",
+    "SQA",
+    "SQA_SF",
+    "SQA_DW"
+  ],
+  "note": "Unit-partition benchmark: all partition sizes = 1."
+}

@@ -169,6 +169,55 @@ def _run_sqa(solver_class, nodes, partitions, k_safety, requests, comm_costs,
         }
 
 
+def _run_qpu(solver_class, nodes, partitions, k_safety, requests, comm_costs,
+             num_reads, annealing_time, chain_strength):
+    """Run a QPU hardware solver, return result dict with hardware metadata."""
+    try:
+        solver = solver_class(nodes, partitions, k_safety, requests, comm_costs)
+        bqm = solver.build_bqm()
+        bqm_vars = len(bqm.variables)
+        bqm_interactions = len(bqm.quadratic)
+
+        solve_kwargs = dict(num_reads=num_reads, annealing_time=annealing_time)
+        if chain_strength is not None:
+            solve_kwargs["chain_strength"] = chain_strength
+
+        t_ms, result = solver.solve(**solve_kwargs)
+
+        cost = calculate_solution_cost(
+            nodes, partitions, k_safety, requests, comm_costs, result
+        )
+        valid = is_valid_solution(
+            nodes, partitions, k_safety, requests, comm_costs, result
+        )
+
+        hw = solver.hardware_summary()
+
+        return {
+            "cost": cost,
+            "valid": valid,
+            "time_ms": round(t_ms, 1),
+            "bqm_variables": bqm_vars,
+            "bqm_interactions": bqm_interactions,
+            "physical_qubits": hw.get("physical_qubits"),
+            "chain_break_fraction": hw.get("chain_break_fraction"),
+            "qpu_access_time_us": hw.get("qpu_access_time_us"),
+            "error": None,
+        }
+    except Exception as e:
+        return {
+            "cost": None,
+            "valid": False,
+            "time_ms": None,
+            "bqm_variables": None,
+            "bqm_interactions": None,
+            "physical_qubits": None,
+            "chain_break_fraction": None,
+            "qpu_access_time_us": None,
+            "error": str(e),
+        }
+
+
 # ---------------------------------------------------------------------------
 # Main harness
 # ---------------------------------------------------------------------------
@@ -181,6 +230,8 @@ def run_experiment(
     num_reads=1000,
     num_sweeps=1000,
     beta_range=None,
+    annealing_time=20,
+    chain_strength=None,
     note=None,
 ):
     """
@@ -190,16 +241,20 @@ def run_experiment(
         test_case_paths: list of Path objects pointing to JSON test cases.
         solver_registry: list of solver descriptors, each a dict:
             {
-                "name":  str,           # e.g. "ILP", "SQA", "SQA_DW"
-                "class": class,         # solver class
-                "type":  "ilp" | "sqa", # determines how we invoke it
+                "name":  str,               # e.g. "ILP", "SQA", "SQA_HW"
+                "class": class,             # solver class
+                "type":  "ilp"|"sqa"|"qpu", # determines how we invoke it
             }
-        output_dir:   directory for the result JSON file.
-        file_prefix:  prefix for the auto-numbered output filename.
-        num_reads:    SQA num_reads (ignored for ILP solvers).
-        num_sweeps:   SQA num_sweeps (ignored for ILP solvers).
-        beta_range:   SQA beta_range (ignored for ILP solvers).
-        note:         optional string added to metadata.
+        output_dir:      directory for the result JSON file.
+        file_prefix:     prefix for the auto-numbered output filename.
+        num_reads:       num_reads for SQA and QPU solvers (ignored for ILP).
+        num_sweeps:      SQA num_sweeps (ignored for ILP and QPU solvers).
+        beta_range:      SQA beta_range (ignored for ILP and QPU solvers).
+        annealing_time:  QPU anneal duration in microseconds (ignored for
+                         ILP and simulated SQA solvers).  Default 20.
+        chain_strength:  QPU chain strength (ignored for ILP and simulated
+                         SQA solvers).  None = sampler default heuristic.
+        note:            optional string added to metadata.
 
     Returns:
         Path to the created results file.
@@ -218,18 +273,24 @@ def run_experiment(
     output_path = output_dir / f"{file_prefix}_{file_num}.json"
 
     solver_names = [s["name"] for s in solver_registry]
+    has_sqa = any(s["type"] == "sqa" for s in solver_registry)
+    has_qpu = any(s["type"] == "qpu" for s in solver_registry)
 
-    output = {
-        "metadata": {
-            "date":            date.today().isoformat(),
-            "time":            datetime.now().strftime("%H:%M:%S"),
-            "total_cases":     len(test_case_paths),
-            "num_reads":       num_reads,
-            "num_sweeps":      num_sweeps,
-            "solvers":         solver_names,
-        },
-        "results": {},
+    metadata = {
+        "date":            date.today().isoformat(),
+        "time":            datetime.now().strftime("%H:%M:%S"),
+        "total_cases":     len(test_case_paths),
+        "num_reads":       num_reads,
+        "solvers":         solver_names,
     }
+    if has_sqa:
+        metadata["num_sweeps"] = num_sweeps
+    if has_qpu:
+        metadata["annealing_time"] = annealing_time
+        if chain_strength is not None:
+            metadata["chain_strength"] = chain_strength
+
+    output = {"metadata": metadata, "results": {}}
     if note:
         output["metadata"]["note"] = note
 
@@ -270,7 +331,7 @@ def run_experiment(
                 )
                 if result["valid"] and result["cost"] is not None:
                     ilp_cost = result["cost"]
-            else:
+            elif solver_type == "sqa":
                 result = _run_sqa(
                     cls, nodes, partitions, k_safety, requests, comm_costs,
                     num_reads=num_reads,
@@ -286,6 +347,24 @@ def run_experiment(
                     )
                 else:
                     result["optimality_gap"] = None
+            elif solver_type == "qpu":
+                result = _run_qpu(
+                    cls, nodes, partitions, k_safety, requests, comm_costs,
+                    num_reads=num_reads,
+                    annealing_time=annealing_time,
+                    chain_strength=chain_strength,
+                )
+                # Compute optimality gap vs ILP
+                if (ilp_cost is not None and ilp_cost > 0
+                        and result["valid"]
+                        and result["cost"] is not None):
+                    result["optimality_gap"] = round(
+                        (result["cost"] - ilp_cost) / ilp_cost, 4
+                    )
+                else:
+                    result["optimality_gap"] = None
+            else:
+                raise ValueError(f"Unknown solver type: {solver_type!r}")
 
             entry["solvers"][name] = result
 
