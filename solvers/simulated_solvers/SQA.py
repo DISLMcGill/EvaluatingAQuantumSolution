@@ -21,6 +21,11 @@ import dimod
 import pandas as pd
 from dwave.samplers import PathIntegralAnnealingSampler
 
+from util.sample_selection import (
+    POLICY_BEST_FEASIBLE,
+    VALID_POLICIES,
+    select_sample,
+)
 from util.solver_base import SolverBase
 
 
@@ -60,8 +65,16 @@ def _binary_chunks(capacity):
 
 
 class SQASolver(SolverBase):
-    def __init__(self, nodes, partitions, k_safety, requests, comm_costs):
+    def __init__(self, nodes, partitions, k_safety, requests, comm_costs,
+                 selection_policy=POLICY_BEST_FEASIBLE):
         SolverBase.__init__(self, nodes, partitions, k_safety, requests, comm_costs)
+        if selection_policy not in VALID_POLICIES:
+            raise ValueError(
+                f"selection_policy must be one of {VALID_POLICIES}, "
+                f"got {selection_policy!r}"
+            )
+        self.selection_policy = selection_policy
+        self.selection_diagnostics = None
 
     def build_bqm(self):
         """Build and return the BinaryQuadraticModel without solving."""
@@ -89,13 +102,37 @@ class SQASolver(SolverBase):
             for p in self.partitions for n in self.nodes
         ) + 1
 
+        # k-safety multiplier: scale h by max(size_p)**2.
+        #
+        # The storage equality below is squared into the BQM, so its
+        # quadratic penalty terms on the assignment variables scale as
+        # ``size_p * size_p'`` -- i.e. up to ``smax**2`` where
+        # ``smax = max_p size_p``.  With Paper 1's single ``h`` shared by
+        # both constraint families this is fine for unit partitions
+        # (smax = 1) but, for arbitrary ``size_p``, the storage penalty
+        # outweighs the O(h) k-safety penalty by a factor of smax**2.
+        # The sampler then satisfies the storage constraint and ignores
+        # k-safety, so *zero* reads come out jointly feasible (observed on
+        # both the QPU and the PathIntegral sampler: feasibility_yield ->
+        # 0 as size_p and |P| grow).  Scaling the k-safety multiplier by
+        # smax**2 restores the balance and lifts feasibility yield from ~0
+        # back to ~0.5 on the arbitrary tier-1 cases, while leaving the
+        # unit case byte-identical (smax = 1 -> h_k = h).  This mirrors
+        # S2's ``h_k = h * max_C`` rationale ("k-safety must dominate"),
+        # but keyed to the quantity that actually inflates S1's storage
+        # term -- the partition size, not the node capacity.  The storage
+        # multiplier itself stays at the proven-sufficient value ``h``, so
+        # the feasible ground state is preserved.
+        smax = max((int(s) for s in self.partitions.values()), default=1)
+        h_k = h * smax * smax
+
         # 3. Q_R: k-safety constraints
         for p in self.partitions:
             k_safety_expr = [(A[p, n], 1) for n in self.nodes]
             bqm.add_linear_equality_constraint(
                 k_safety_expr,
                 constant=-self.k_safety,
-                lagrange_multiplier=h,
+                lagrange_multiplier=h_k,
             )
 
         # 4. Q_S: storage constraint as equality
@@ -131,9 +168,16 @@ class SQASolver(SolverBase):
         end = time.perf_counter()
 
         time_taken = (end - start) * 1000
+        selected, sel_diag = select_sample(
+            sampleset,
+            self.nodes, self.partitions, self.k_safety,
+            self.requests, self.comm_costs,
+            policy=self.selection_policy,
+        )
         self.time_taken = time_taken
-        self.result = sampleset.first
-        return time_taken, sampleset.first
+        self.result = selected
+        self.selection_diagnostics = sel_diag
+        return time_taken, selected
 
     def format_answer(self, result=None):
         sample_obj = result if result is not None else self.result

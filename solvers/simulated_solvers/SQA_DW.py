@@ -37,6 +37,11 @@ import pandas as pd
 from dwave.samplers import PathIntegralAnnealingSampler
 
 from solvers.simulated_solvers.SQA_SF import calibrate_lambdas
+from util.sample_selection import (
+    POLICY_BEST_FEASIBLE,
+    VALID_POLICIES,
+    select_sample,
+)
 from util.solver_base import SolverBase
 
 
@@ -52,10 +57,19 @@ class SQADomainWallSolver(SolverBase):
         comm_costs,
         lambda_1: Optional[float] = None,
         lambda_2: Optional[float] = None,
+        selection_policy: str = POLICY_BEST_FEASIBLE,
     ):
         # S3 does NOT require unit partition sizes: the unbalanced
         # storage penalty handles arbitrary sizes (same as S2).
         SolverBase.__init__(self, nodes, partitions, k_safety, requests, comm_costs)
+
+        if selection_policy not in VALID_POLICIES:
+            raise ValueError(
+                f"selection_policy must be one of {VALID_POLICIES}, "
+                f"got {selection_policy!r}"
+            )
+        self.selection_policy = selection_policy
+        self.selection_diagnostics = None
 
         if (lambda_1 is None) ^ (lambda_2 is None):
             raise ValueError(
@@ -196,9 +210,16 @@ class SQADomainWallSolver(SolverBase):
         end = time.perf_counter()
 
         time_taken = (end - start) * 1000
+        selected, sel_diag = select_sample(
+            sampleset,
+            self.nodes, self.partitions, self.k_safety,
+            self.requests, self.comm_costs,
+            policy=self.selection_policy,
+        )
         self.time_taken = time_taken
-        self.result = sampleset.first
-        return time_taken, sampleset.first
+        self.result = selected
+        self.selection_diagnostics = sel_diag
+        return time_taken, selected
 
     def format_answer(self, result=None):
         sample_obj = result if result is not None else self.result

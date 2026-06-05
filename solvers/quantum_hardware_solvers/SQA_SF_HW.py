@@ -26,25 +26,47 @@ Usage:
 import time
 
 from dwave.system import DWaveSampler, EmbeddingComposite
+from solvers.quantum_hardware_solvers._hw_common import (
+    chain_break_fraction as _chain_break_fraction,
+    extract_hardware_summary,
+    submit_with_retry,
+)
 from solvers.simulated_solvers.SQA_SF import SQASlackFreeSolver
+from util.sample_selection import (
+    POLICY_BEST_FEASIBLE,
+    VALID_POLICIES,
+    select_sample,
+)
 
 
 class SQASFHardwareSolver(SQASlackFreeSolver):
     """S2 (slack-free) on real D-Wave hardware."""
 
     def __init__(self, nodes, partitions, k_safety, requests, comm_costs,
-                 solver_name=None):
+                 solver_name=None, selection_policy=POLICY_BEST_FEASIBLE):
         """
         Args:
             nodes, partitions, k_safety, requests, comm_costs:
-                Standard problem definition (see SolverBase).
-                All partition sizes must be 1.
+                Standard problem definition (see SolverBase).  Arbitrary
+                integer partition sizes are supported -- ``size_p`` enters
+                the unbalanced penalty's coefficients explicitly (see the
+                module docstring and ``build_bqm``); it is not restricted
+                to 1.
             solver_name:
                 Optional D-Wave solver identifier, e.g. 'Advantage_system6.4'.
                 If None, the client's default QPU is used.
+            selection_policy:
+                'best_feasible' (default) or 'lowest_energy' -- see
+                ``util.sample_selection``.
         """
         super().__init__(nodes, partitions, k_safety, requests, comm_costs)
         self.solver_name = solver_name
+        if selection_policy not in VALID_POLICIES:
+            raise ValueError(
+                f"selection_policy must be one of {VALID_POLICIES}, "
+                f"got {selection_policy!r}"
+            )
+        self.selection_policy = selection_policy
 
         # Populated after solve()
         self.embedding = None
@@ -52,6 +74,9 @@ class SQASFHardwareSolver(SQASlackFreeSolver):
         self.chain_break_fraction = None
         self.physical_qubits = None
         self.sampleset = None
+        self.chip_id = None
+        self.problem_id = None
+        self.selection_diagnostics = None
 
     # build_bqm() is inherited unchanged from SQASlackFreeSolver.
 
@@ -66,7 +91,8 @@ class SQASFHardwareSolver(SQASlackFreeSolver):
                             If None, the default heuristic is used.
 
         Returns:
-            (time_ms, result): wall-clock time in ms and the best sample.
+            (time_ms, result): wall-clock time in ms and the sample
+            picked by ``self.selection_policy`` (see __init__).
             QPU-specific timing is stored in self.qpu_timing.
         """
         bqm = self.build_bqm()
@@ -76,18 +102,31 @@ class SQASFHardwareSolver(SQASlackFreeSolver):
         if self.solver_name is not None:
             qpu_kwargs['solver'] = self.solver_name
 
-        sampler = EmbeddingComposite(DWaveSampler(**qpu_kwargs))
+        qpu = DWaveSampler(**qpu_kwargs)
+        sampler = EmbeddingComposite(qpu)
+
+        # Capture chip_id eagerly: the underlying sampler may be
+        # garbage-collected before hardware_summary() is called.
+        try:
+            self.chip_id = qpu.properties.get('chip_id')
+        except Exception:
+            self.chip_id = None
 
         sample_kwargs = dict(
             num_reads=num_reads,
             annealing_time=annealing_time,
+            # EmbeddingComposite defaults this to False in current
+            # versions of dwave-system; without it,
+            # sampleset.info['embedding_context'] is empty and we lose
+            # the chain dict + physical-qubit count.
+            return_embedding=True,
         )
         if chain_strength is not None:
             sample_kwargs['chain_strength'] = chain_strength
 
-        # --- Submit to QPU ---
+        # --- Submit to QPU (bounded retry/backoff on transient errors) ---
         start = time.perf_counter()
-        sampleset = sampler.sample(bqm, **sample_kwargs)
+        sampleset = submit_with_retry(sampler, bqm, sample_kwargs)
         end = time.perf_counter()
 
         wall_time_ms = (end - start) * 1000
@@ -101,32 +140,28 @@ class SQASFHardwareSolver(SQASlackFreeSolver):
             if self.embedding else None
         )
         self.chain_break_fraction = _chain_break_fraction(sampleset)
+        self.problem_id = sampleset.info.get('problem_id')
+
+        # --- Pick the reported result per the configured policy ---
+        selected, sel_diag = select_sample(
+            sampleset,
+            self.nodes, self.partitions, self.k_safety,
+            self.requests, self.comm_costs,
+            policy=self.selection_policy,
+        )
+        self.selection_diagnostics = sel_diag
 
         self.time_taken = wall_time_ms
-        self.result = sampleset.first
+        self.result = selected
 
-        return wall_time_ms, sampleset.first
+        return wall_time_ms, selected
 
     def hardware_summary(self):
         """Return a dict summarising QPU execution metadata."""
-        qpu_access_us = self.qpu_timing.get('qpu_access_time', None)
-        qpu_anneal_us = self.qpu_timing.get('qpu_anneal_time_per_sample', None)
-        return {
-            'wall_time_ms': round(self.time_taken, 1) if self.time_taken >= 0 else None,
-            'qpu_access_time_us': qpu_access_us,
-            'qpu_anneal_time_per_sample_us': qpu_anneal_us,
-            'physical_qubits': self.physical_qubits,
-            'logical_variables': len(self.sampleset.variables) if self.sampleset else None,
-            'chain_break_fraction': self.chain_break_fraction,
-            'num_reads': len(self.sampleset) if self.sampleset else None,
-        }
-
-
-def _chain_break_fraction(sampleset):
-    """Compute the fraction of samples that contain at least one chain break."""
-    if not hasattr(sampleset, 'record') or 'chain_break_fraction' not in sampleset.record.dtype.names:
-        return None
-    fractions = sampleset.record['chain_break_fraction']
-    if len(fractions) == 0:
-        return None
-    return round(float(fractions.mean()), 4)
+        return extract_hardware_summary(
+            sampleset=self.sampleset,
+            embedding=self.embedding,
+            wall_time_ms=self.time_taken,
+            chip_id=self.chip_id,
+            selection_diagnostics=self.selection_diagnostics,
+        )

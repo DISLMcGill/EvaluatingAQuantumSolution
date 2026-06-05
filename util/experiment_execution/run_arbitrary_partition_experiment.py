@@ -25,11 +25,17 @@ from util.experiment_execution.run_experiment import (
     discover_test_cases,
     run_experiment,
 )
+from util.experiment_execution.run_unit_partition_experiment import (
+    _with_selection_policy,
+    result_dir_for,
+)
+from util.sample_selection import (
+    POLICY_BEST_FEASIBLE,
+    VALID_POLICIES,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 TEST_BANK    = PROJECT_ROOT / "test_bank" / "arbitrary_partition"
-RESULT_DIR_SIM = PROJECT_ROOT / "result_bank" / "simulated_solver_results"
-RESULT_DIR_HW  = PROJECT_ROOT / "result_bank" / "quantum_hardware_results"
 
 SOLVER_REGISTRY_SIM = [
     {"name": "ILP",    "class": ILPSolver,             "type": "ilp"},
@@ -77,13 +83,25 @@ def run_arbitrary_experiment(
     chain_strength=None,
     extra_registry=None,
     include_s3=False,
+    selection_policy=POLICY_BEST_FEASIBLE,
+    resume=False,
 ):
     """Run the arbitrary-partition experiment.
 
     See ``run_unit_partition_experiment.run_unit_experiment`` for argument
     semantics.  The two runners share a structure; the only difference is
     which test-bank subdirectory they read from.
+
+    ``selection_policy`` works the same way here: 'best_feasible' (default)
+    routes output to the parallel ``*_feasible/`` result-bank tree;
+    'lowest_energy' restores legacy behaviour and the original tree.
     """
+    if selection_policy not in VALID_POLICIES:
+        raise ValueError(
+            f"selection_policy must be one of {VALID_POLICIES}, "
+            f"got {selection_policy!r}"
+        )
+
     paths = discover_test_cases(
         TEST_BANK,
         tier=tier,
@@ -98,16 +116,19 @@ def run_arbitrary_experiment(
 
     if hardware:
         registry = [SOLVER_REGISTRY_SIM[0]] + _get_hw_registry(include_s3=include_s3)
-        result_dir = RESULT_DIR_HW
         prefix = "ArbitraryExperiment_HW"
         note = "Arbitrary-partition benchmark (D-Wave QPU): variable partition sizes."
     else:
         registry = extra_registry if extra_registry is not None else SOLVER_REGISTRY_SIM
-        result_dir = RESULT_DIR_SIM
         prefix = "ArbitraryExperiment"
         note = "Arbitrary-partition benchmark: variable partition sizes."
 
+    result_dir = result_dir_for(hardware=hardware, selection_policy=selection_policy)
+    note = f"{note}  selection_policy={selection_policy}."
+    registry = _with_selection_policy(registry, selection_policy)
+
     print(f"Found {len(paths)} arbitrary-partition test cases.")
+    print(f"selection_policy={selection_policy} -> {result_dir.name}/")
 
     return run_experiment(
         test_case_paths=paths,
@@ -120,14 +141,34 @@ def run_arbitrary_experiment(
         annealing_time=annealing_time,
         chain_strength=chain_strength,
         note=note,
+        resume=resume,
     )
 
 
 if __name__ == "__main__":
     # See run_unit_partition_experiment.py for the rationale behind
     # these sampler defaults.  Bump for tier 2 or the full grid.
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Run the simulated arbitrary-partition experiment.",
+    )
+    parser.add_argument("--tier", default="tier1",
+                        help="tier1, tier2, or 'all' for both (default tier1).")
+    parser.add_argument("--num-reads", type=int, default=200)
+    parser.add_argument("--num-sweeps", type=int, default=500)
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="Continue the most recent ArbitraryExperiment_<N>.json in "
+             "the result bank instead of starting a fresh file: cases "
+             "already recorded there are skipped.  Use this to pick a "
+             "sweep back up after an interruption (sleep, Ctrl-C, crash).",
+    )
+    args = parser.parse_args()
+
     run_arbitrary_experiment(
-        tier="tier1",
-        num_reads=200,
-        num_sweeps=500,
+        tier=None if args.tier == "all" else args.tier,
+        num_reads=args.num_reads,
+        num_sweeps=args.num_sweeps,
+        resume=args.resume,
     )
