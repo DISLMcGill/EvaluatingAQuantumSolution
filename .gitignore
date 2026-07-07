@@ -22,3 +22,11 @@ pytest-cache-files-*/
 result_bank/_lean_smoke_test/
 result_bank/quantum_hardware_results/MinimalSmoke_*.json
 result_bank/quantum_hardware_results/SingleCaseBench_*.json
+
+__pycache__/
+*.pyc
+.venv/
+.idea/
+.pytest_cache/
+.hypothesis/
+.DS_Store
