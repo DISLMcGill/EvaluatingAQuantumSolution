@@ -7,10 +7,8 @@ Two QUBO encodings are exercised by default — a slack-variable encoding
 (Montañez-Barrera et al. 2022) — and the result of each run is checked
 against the exact optimum found by CBC.
 
-The repository began with a critical audit of an earlier version of the
-code (see `CRITICAL_REVIEW.md`) and a corresponding remediation plan
-(`REMEDIATION_PLAN.md`); the current state reflects the executed parts of
-that plan. `EXECUTION_SUMMARY.md` records what was done.
+The current code reflects the executed remediation of an earlier,
+audited version of the project.
 
 ## The problem
 
@@ -70,11 +68,17 @@ keeps headline numbers honest.  To run it deliberately, use
 ```
 QuantumClean/
 ├── README.md                            ← this file
-├── CRITICAL_REVIEW.md                   ← initial audit
-├── REMEDIATION_PLAN.md                  ← phased remediation plan
-├── EXECUTION_SUMMARY.md                 ← what was actually executed
 ├── pyproject.toml                       ← project metadata + pytest config
 ├── requirements.txt                     ← pinned dependencies
+│
+├── tier1_unit_sqa_hw.py                 ← entry point: unit sweep on QPU
+├── tier1_unit_sqa_hybrid.py             ← entry point: unit sweep on Leap hybrid
+├── tier1_arbitrary_sqa_hw.py            ← entry point: arbitrary sweep on QPU
+├── tier1_arbitrary_sqa_hybrid.py        ← entry point: arbitrary sweep on Leap hybrid
+├── single_case_hw_bench.py              ← entry point: single-case QPU benchmark
+├── minimal_hw_test.py                   ← entry point: minimal QPU smoke test
+├── hybrid_time_calibration.py           ← entry point: hybrid time_limit calibration
+├── dwave_usage.py                       ← utility: report Leap QPU usage
 │
 ├── solvers/                             ← all solver implementations
 │   ├── README.md
@@ -102,12 +106,15 @@ QuantumClean/
 │   │   ├── generate_unit_test_case.py   ← unit partitions; tightness-stratified
 │   │   ├── generate_paired_test_cases.py
 │   │   ├── generate_test_banks.py
-│   │   └── json_to_dict.py
+│   │   ├── json_to_dict.py
+│   │   ├── feasibility_probe.py         ← feasibility pre-check for stress cases
+│   │   └── populate_hybrid_stress_bank.py ← builds test_bank/hybrid_stress/
 │   └── experiment_execution/
 │       ├── README.md
 │       ├── run_experiment.py            ← Phase-5 harness
 │       ├── run_unit_partition_experiment.py
-│       └── run_arbitrary_partition_experiment.py
+│       ├── run_arbitrary_partition_experiment.py
+│       └── hybrid_budget.py            ← time_limit budgeting for hybrid runs
 │
 ├── tests/                               ← pytest suite; ExactSolver oracles
 │   ├── README.md
@@ -120,17 +127,41 @@ QuantumClean/
 │
 ├── test_bank/                           ← pre-generated problem instances
 │   ├── unit_partition/{tier1,tier2}/n{N}_p{P}/t{30,70,100}/
-│   └── arbitrary_partition/{tier1,tier2}/n{N}_p{P}/t{30,70,90}/
+│   ├── arbitrary_partition/{tier1,tier2}/n{N}_p{P}/t{30,70,90}/
+│   └── hybrid_stress/{unit,arbitrary}_partition/n{N}_p{P}/t{…}/
 │
 ├── result_bank/                         ← experiment outputs
-│   ├── simulated_solver_results/        ← SQA runner outputs (Unit/Arbitrary*.json)
-│   └── quantum_hardware_results/        ← QPU runner outputs
+│   ├── simulated_solver_results[_feasible]/  ← simulated-solver outputs (Unit/Arbitrary*.json)
+│   ├── quantum_hardware_results[_feasible]/  ← QPU runner outputs
+│   └── hybrid_results_feasible/              ← Leap hybrid runner outputs
 │
 └── result_analysis/                     ← Jupyter notebooks (not in CI)
     ├── unit_sweep_analysis.ipynb        ← schema-aware loader for UnitExperiment_*.json
     ├── arbitrary_sweep_analysis.ipynb   ← schema-aware loader for ArbitraryExperiment_*.json
+    ├── <Experiment>_analysis.ipynb      ← per-run analyses (sim / hardware / hybrid-merged)
+    ├── timing_analysis.ipynb            ← wall-time vs solver-time comparison
+    ├── qpu_runtime_analysis.ipynb       ← QPU access-time breakdown
     └── plots/                           ← PNGs the notebooks write on `plt.savefig`
 ```
+
+## Entry points (root scripts)
+
+The runnable scripts live at the repo root and are the intended entry
+points; everything under `solvers/`, `util/`, and `tests/` is library
+code they call. Run them from the repo root (e.g. `python
+tier1_unit_sqa_hw.py`). The four `tier1_*` sweeps form a grid of
+**unit vs. arbitrary** partition bank × **hardware (QPU) vs. hybrid** solver.
+
+| Script | What it runs |
+|--------|--------------|
+| `tier1_unit_sqa_hw.py` | Tier-1 **unit**-partition sweep (S1+S2) on real D-Wave **hardware**. `--full` = all 180 cases, `--no-pause` = unattended. |
+| `tier1_unit_sqa_hybrid.py` | Same unit-partition sweep via the Leap **hybrid** BQM solver. |
+| `tier1_arbitrary_sqa_hw.py` | Tier-1 **arbitrary**-partition sweep (S1+S2) on hardware. |
+| `tier1_arbitrary_sqa_hybrid.py` | Same arbitrary-partition sweep via the hybrid solver. |
+| `single_case_hw_bench.py` | Full benchmark on a single case (~2 QPU submissions) — sanity-check the pipeline before a full sweep. |
+| `minimal_hw_test.py` | Minimal end-to-end QPU connectivity/smoke test on the smallest case. |
+| `hybrid_time_calibration.py` | Finds the hybrid `time_limit` "knee" for the `hybrid_stress` bench. |
+| `dwave_usage.py` | Reports D-Wave Leap QPU usage and timing across submitted jobs. |
 
 ## Getting started
 
@@ -221,15 +252,18 @@ with the `_HW` prefix.
 
 ### Analyse results
 
-The two notebooks in `result_analysis/` consume the JSON files above
+The notebooks in `result_analysis/` consume the JSON files above
 directly.  Each notebook auto-detects which solvers are present in the
 file and picks up the **most recent** `UnitExperiment_*.json` or
 `ArbitraryExperiment_*.json` by default — replace `RESULTS_FILE` in the
 first cell to pin a specific run.
 
 ```
-result_analysis/unit_sweep_analysis.ipynb        # for Unit*.json
-result_analysis/arbitrary_sweep_analysis.ipynb   # for Arbitrary*.json
+result_analysis/unit_sweep_analysis.ipynb        # generic loader, latest Unit*.json
+result_analysis/arbitrary_sweep_analysis.ipynb   # generic loader, latest Arbitrary*.json
+result_analysis/<Experiment>_analysis.ipynb      # per-run analyses (sim / hardware / hybrid-merged)
+result_analysis/timing_analysis.ipynb            # wall-time vs solver-time comparison
+result_analysis/qpu_runtime_analysis.ipynb       # QPU access-time breakdown
 ```
 
 Each notebook produces an aggregate summary, validity / gap heatmaps

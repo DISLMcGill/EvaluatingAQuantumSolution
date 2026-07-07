@@ -34,13 +34,18 @@ import time
 from dwave.system import LeapHybridSampler
 from solvers.hybrid_solvers._hybrid_common import extract_hybrid_summary
 from solvers.simulated_solvers.SQA import SQASolver
+from util.sample_selection import (
+    POLICY_BEST_FEASIBLE,
+    VALID_POLICIES,
+    select_sample,
+)
 
 
 class SQAHybridSolver(SQASolver):
     """S1 on a D-Wave Leap hybrid BQM solver."""
 
     def __init__(self, nodes, partitions, k_safety, requests, comm_costs,
-                 solver_name=None):
+                 solver_name=None, selection_policy=POLICY_BEST_FEASIBLE):
         """
         Args:
             nodes, partitions, k_safety, requests, comm_costs:
@@ -49,15 +54,30 @@ class SQAHybridSolver(SQASolver):
                 Optional Leap hybrid solver identifier, e.g.
                 'hybrid_binary_quadratic_model_version2'.  If None, the
                 client's default hybrid BQM solver is used.
+            selection_policy:
+                'best_feasible' (default) -- return the lowest-energy
+                feasible sample, falling back to the lowest-energy sample
+                overall when no read is feasible.  Matches the QPU and
+                simulated solvers so hybrid results are directly
+                comparable to those banks.  'lowest_energy' -- legacy
+                behaviour: return the lowest-energy sample regardless of
+                feasibility.
         """
         super().__init__(nodes, partitions, k_safety, requests, comm_costs)
         self.solver_name = solver_name
+        if selection_policy not in VALID_POLICIES:
+            raise ValueError(
+                f"selection_policy must be one of {VALID_POLICIES}, "
+                f"got {selection_policy!r}"
+            )
+        self.selection_policy = selection_policy
 
         # Populated after solve()
         self.hybrid_timing = None
         self.sampleset = None
         self.solver_id = None
         self.problem_id = None
+        self.selection_diagnostics = None
 
     # build_bqm() is inherited unchanged from SQASolver.
 
@@ -111,10 +131,23 @@ class SQAHybridSolver(SQASolver):
         self.hybrid_timing = sampleset.info.get('timing', {})
         self.problem_id = sampleset.info.get('problem_id')
 
-        self.time_taken = wall_time_ms
-        self.result = sampleset.first
+        # --- Pick the reported result per the configured policy ---
+        # Hybrid solvers used to return ``sampleset.first`` (lowest
+        # energy, unconditionally).  Using the same feasibility-aware
+        # selection as the QPU/sim paths keeps hybrid cost/validity
+        # comparable to those banks.
+        selected, sel_diag = select_sample(
+            sampleset,
+            self.nodes, self.partitions, self.k_safety,
+            self.requests, self.comm_costs,
+            policy=self.selection_policy,
+        )
+        self.selection_diagnostics = sel_diag
 
-        return wall_time_ms, sampleset.first
+        self.time_taken = wall_time_ms
+        self.result = selected
+
+        return wall_time_ms, selected
 
     def hybrid_summary(self):
         """Return a dict summarising hybrid-solver execution metadata."""

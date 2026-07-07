@@ -1,0 +1,149 @@
+{
+    "bench": "hybrid_stress",
+    "purpose": "compact, large-scale bench to push hybrid solvers past tier-1/2; feasibility-probe-only (no ILP optimum).",
+    "k_safety": 2,
+    "cases_per_cell": 3,
+    "cells": [
+        {
+            "n_nodes": 15,
+            "n_partitions": 100,
+            "approx_vars": 1500
+        },
+        {
+            "n_nodes": 20,
+            "n_partitions": 150,
+            "approx_vars": 3000
+        },
+        {
+            "n_nodes": 25,
+            "n_partitions": 200,
+            "approx_vars": 5000
+        },
+        {
+            "n_nodes": 30,
+            "n_partitions": 300,
+            "approx_vars": 9000
+        },
+        {
+            "n_nodes": 40,
+            "n_partitions": 400,
+            "approx_vars": 16000
+        }
+    ],
+    "unit_tightness_levels": [
+        0.7,
+        1.0
+    ],
+    "arbitrary_tightness_levels": [
+        0.3,
+        0.7
+    ],
+    "feasibility_only": true,
+    "probe_time_limit_s": 60.0,
+    "size_range_arbitrary": [
+        5,
+        20
+    ],
+    "req_range": [
+        0,
+        10
+    ],
+    "cost_range": [
+        1,
+        10
+    ],
+    "seeds": {
+        "unit_base": 7000,
+        "arbitrary_base": 8000
+    },
+    "generated_files": {
+        "unit_partition": [
+            "hybrid_stress/unit_partition/n15_p100/t70/n-15_p-100_1.json",
+            "hybrid_stress/unit_partition/n15_p100/t70/n-15_p-100_2.json",
+            "hybrid_stress/unit_partition/n15_p100/t70/n-15_p-100_3.json",
+            "hybrid_stress/unit_partition/n15_p100/t100/n-15_p-100_1.json",
+            "hybrid_stress/unit_partition/n15_p100/t100/n-15_p-100_2.json",
+            "hybrid_stress/unit_partition/n15_p100/t100/n-15_p-100_3.json",
+            "hybrid_stress/unit_partition/n20_p150/t70/n-20_p-150_1.json",
+            "hybrid_stress/unit_partition/n20_p150/t70/n-20_p-150_2.json",
+            "hybrid_stress/unit_partition/n20_p150/t70/n-20_p-150_3.json",
+            "hybrid_stress/unit_partition/n20_p150/t100/n-20_p-150_1.json",
+            "hybrid_stress/unit_partition/n20_p150/t100/n-20_p-150_2.json",
+            "hybrid_stress/unit_partition/n20_p150/t100/n-20_p-150_3.json",
+            "hybrid_stress/unit_partition/n25_p200/t70/n-25_p-200_1.json",
+            "hybrid_stress/unit_partition/n25_p200/t70/n-25_p-200_2.json",
+            "hybrid_stress/unit_partition/n25_p200/t70/n-25_p-200_3.json",
+            "hybrid_stress/unit_partition/n25_p200/t100/n-25_p-200_1.json",
+            "hybrid_stress/unit_partition/n25_p200/t100/n-25_p-200_2.json",
+            "hybrid_stress/unit_partition/n25_p200/t100/n-25_p-200_3.json",
+            "hybrid_stress/unit_partition/n30_p300/t70/n-30_p-300_1.json",
+            "hybrid_stress/unit_partition/n30_p300/t70/n-30_p-300_2.json",
+            "hybrid_stress/unit_partition/n30_p300/t70/n-30_p-300_3.json",
+            "hybrid_stress/unit_partition/n30_p300/t100/n-30_p-300_1.json",
+            "hybrid_stress/unit_partition/n30_p300/t100/n-30_p-300_2.json",
+            "hybrid_stress/unit_partition/n30_p300/t100/n-30_p-300_3.json",
+            "hybrid_stress/unit_partition/n40_p400/t70/n-40_p-400_1.json",
+            "hybrid_stress/unit_partition/n40_p400/t70/n-40_p-400_2.json",
+            "hybrid_stress/unit_partition/n40_p400/t70/n-40_p-400_3.json",
+            "hybrid_stress/unit_partition/n40_p400/t100/n-40_p-400_1.json",
+            "hybrid_stress/unit_partition/n40_p400/t100/n-40_p-400_2.json",
+            "hybrid_stress/unit_partition/n40_p400/t100/n-40_p-400_3.json"
+        ],
+        "arbitrary_partition": [
+            "hybrid_stress/arbitrary_partition/n15_p100/t30/n-15_p-100_1.json",
+            "hybrid_stress/arbitrary_partition/n15_p100/t30/n-15_p-100_2.json",
+            "hybrid_stress/arbitrary_partition/n15_p100/t30/n-15_p-100_3.json",
+            "hybrid_stress/arbitrary_partition/n15_p100/t70/n-15_p-100_1.json",
+            "hybrid_stress/arbitrary_partition/n15_p100/t70/n-15_p-100_2.json",
+            "hybrid_stress/arbitrary_partition/n15_p100/t70/n-15_p-100_3.json",
+            "hybrid_stress/arbitrary_partition/n20_p150/t30/n-20_p-150_1.json",
+            "hybrid_stress/arbitrary_partition/n20_p150/t30/n-20_p-150_2.json",
+            "hybrid_stress/arbitrary_partition/n20_p150/t30/n-20_p-150_3.json",
+            "hybrid_stress/arbitrary_partition/n20_p150/t70/n-20_p-150_1.json",
+            "hybrid_stress/arbitrary_partition/n20_p150/t70/n-20_p-150_2.json",
+            "hybrid_stress/arbitrary_partition/n20_p150/t70/n-20_p-150_3.json",
+            "hybrid_stress/arbitrary_partition/n25_p200/t30/n-25_p-200_1.json",
+            "hybrid_stress/arbitrary_partition/n25_p200/t30/n-25_p-200_2.json",
+            "hybrid_stress/arbitrary_partition/n25_p200/t30/n-25_p-200_3.json",
+            "hybrid_stress/arbitrary_partition/n25_p200/t70/n-25_p-200_1.json",
+            "hybrid_stress/arbitrary_partition/n25_p200/t70/n-25_p-200_2.json",
+            "hybrid_stress/arbitrary_partition/n25_p200/t70/n-25_p-200_3.json",
+            "hybrid_stress/arbitrary_partition/n30_p300/t30/n-30_p-300_1.json",
+            "hybrid_stress/arbitrary_partition/n30_p300/t30/n-30_p-300_2.json",
+            "hybrid_stress/arbitrary_partition/n30_p300/t30/n-30_p-300_3.json",
+            "hybrid_stress/arbitrary_partition/n30_p300/t70/n-30_p-300_1.json",
+            "hybrid_stress/arbitrary_partition/n30_p300/t70/n-30_p-300_2.json",
+            "hybrid_stress/arbitrary_partition/n30_p300/t70/n-30_p-300_3.json",
+            "hybrid_stress/arbitrary_partition/n40_p400/t30/n-40_p-400_1.json",
+            "hybrid_stress/arbitrary_partition/n40_p400/t30/n-40_p-400_2.json",
+            "hybrid_stress/arbitrary_partition/n40_p400/t30/n-40_p-400_3.json",
+            "hybrid_stress/arbitrary_partition/n40_p400/t70/n-40_p-400_1.json",
+            "hybrid_stress/arbitrary_partition/n40_p400/t70/n-40_p-400_2.json",
+            "hybrid_stress/arbitrary_partition/n40_p400/t70/n-40_p-400_3.json"
+        ]
+    },
+    "generation_seconds": {
+        "unit/n15_p100/t70": 0.11,
+        "unit/n15_p100/t100": 0.12,
+        "arb/n15_p100/t30": 0.11,
+        "arb/n15_p100/t70": 0.13,
+        "unit/n20_p150/t70": 0.23,
+        "unit/n20_p150/t100": 0.24,
+        "arb/n20_p150/t30": 0.25,
+        "arb/n20_p150/t70": 0.37,
+        "unit/n25_p200/t70": 0.33,
+        "unit/n25_p200/t100": 0.37,
+        "arb/n25_p200/t30": 0.86,
+        "arb/n25_p200/t70": 0.84,
+        "unit/n30_p300/t70": 0.62,
+        "unit/n30_p300/t100": 0.68,
+        "arb/n30_p300/t30": 1.09,
+        "arb/n30_p300/t70": 1.27,
+        "unit/n40_p400/t70": 1.21,
+        "unit/n40_p400/t100": 1.36,
+        "arb/n40_p400/t30": 1.09,
+        "arb/n40_p400/t70": 1.66
+    },
+    "total_files": 60,
+    "total_generation_seconds": 12.95
+}

@@ -29,6 +29,7 @@ import time
 
 from dwave.system import DWaveSampler, EmbeddingComposite
 from solvers.quantum_hardware_solvers._hw_common import (
+    DEFAULT_EMBED_TIMEOUT,
     chain_break_fraction as _chain_break_fraction,
     extract_hardware_summary,
 )
@@ -78,7 +79,8 @@ class SQADWHardwareSolver(SQADomainWallSolver):
 
     # build_bqm() is inherited unchanged from SQADomainWallSolver.
 
-    def solve(self, num_reads=100, annealing_time=20, chain_strength=None):
+    def solve(self, num_reads=100, annealing_time=20, chain_strength=None,
+              embed_timeout=DEFAULT_EMBED_TIMEOUT):
         """
         Build the BQM and submit it to the D-Wave QPU.
 
@@ -87,6 +89,11 @@ class SQADWHardwareSolver(SQADomainWallSolver):
             annealing_time: Anneal duration in microseconds (default 20).
             chain_strength: Coupling strength for physical qubit chains.
                             If None, the default heuristic is used.
+            embed_timeout:  Wall-clock cap (seconds) on the client-side
+                            minor-embedding search.  Defaults to 5 minutes
+                            (DEFAULT_EMBED_TIMEOUT) so an unembeddable BQM
+                            fails fast instead of burning minorminer's
+                            1000 s default.  Pass None for the SDK default.
 
         Returns:
             (time_ms, result): wall-clock time in ms and the sample
@@ -121,6 +128,11 @@ class SQADWHardwareSolver(SQADomainWallSolver):
         )
         if chain_strength is not None:
             sample_kwargs['chain_strength'] = chain_strength
+        # Cap the minor-embedding search so an unembeddable BQM fails in
+        # ~embed_timeout instead of minorminer's 1000 s default.  Passed
+        # through EmbeddingComposite to minorminer.find_embedding.
+        if embed_timeout is not None:
+            sample_kwargs['embedding_parameters'] = {'timeout': embed_timeout}
 
         # --- Submit to QPU ---
         start = time.perf_counter()

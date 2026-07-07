@@ -26,6 +26,20 @@ from __future__ import annotations
 import time as _time
 
 
+# Wall-clock cap (seconds) for the client-side minor-embedding search.
+# EmbeddingComposite delegates embedding to minorminer.find_embedding,
+# whose own default timeout is 1000 s (~16.7 min).  On a problem that has
+# no embedding on the target topology -- e.g. the n9_p50 cell, whose BQM
+# is a dense ~450-variable graph that does not fit Advantage's Pegasus
+# connectivity -- that full 1000 s is spent, per solver and per case,
+# before the search gives up and raises "no embedding found".  Capping
+# the search at 5 minutes bounds that wasted time; the failure is still
+# recorded as a normal solver error by the harness, just 3x sooner.
+# Embeddable cases in this benchmark are found in well under a second, so
+# the cap never bites a case that would otherwise have embedded.
+DEFAULT_EMBED_TIMEOUT = 300.0  # 5 minutes
+
+
 # Substrings that mark a QPU submission failure as *transient* -- a
 # network/queue hiccup worth retrying rather than a real problem with the
 # BQM or account.  Matched case-insensitively against ``str(exc)`` so we

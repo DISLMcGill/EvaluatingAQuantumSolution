@@ -489,6 +489,46 @@ def _run_hybrid(solver_class, nodes, partitions, k_safety, requests, comm_costs,
 
 
 # ---------------------------------------------------------------------------
+# Test-case loading (with retry)
+# ---------------------------------------------------------------------------
+
+def _load_case_with_retry(tc_path, max_attempts=5, base_delay=1.0,
+                          sleep=time.sleep, verbose=False):
+    """
+    Load ``(inputs, metadata)`` for one test case, retrying transient
+    read failures with exponential backoff.
+
+    Reading a test-case JSON can stall on cloud-synced or network
+    volumes -- an iCloud-offloaded file on the macOS Desktop is the
+    motivating case: the OS blocks while re-materialising the file and
+    eventually surfaces ``TimeoutError``/``OSError`` (errno 60,
+    ETIMEDOUT).  A truncated download can also yield a JSON parse error.
+    Either way a single hiccup on case N used to abort the entire sweep
+    after N-1 successful cases.  Backing off and retrying lets the stall
+    settle (or the download finish) so the sweep continues; a genuinely
+    unreadable file still raises after the attempt budget, at which point
+    ``--resume`` can pick up the rest once the file is available.
+    """
+    last_exc = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            inputs = json_to_test_case(str(tc_path))
+            metadata = load_test_case_metadata(str(tc_path))
+            return inputs, metadata
+        except (OSError, ValueError) as exc:  # ValueError covers JSONDecodeError
+            last_exc = exc
+            if attempt >= max_attempts:
+                raise
+            delay = base_delay * (2 ** (attempt - 1))
+            if verbose:
+                print(f"  read of {Path(tc_path).name} failed "
+                      f"({type(exc).__name__}: {exc}); "
+                      f"retry {attempt}/{max_attempts - 1} in {delay:.0f}s ...")
+            sleep(delay)
+    raise last_exc
+
+
+# ---------------------------------------------------------------------------
 # Main harness
 # ---------------------------------------------------------------------------
 
@@ -676,10 +716,9 @@ def run_experiment(
                 dedup += 1
             key = f"{key}__{dedup}"
 
-        nodes, partitions, k_safety, requests, comm_costs = json_to_test_case(
-            str(tc_path)
+        (nodes, partitions, k_safety, requests, comm_costs), tc_metadata = (
+            _load_case_with_retry(tc_path, verbose=verbose)
         )
-        tc_metadata = load_test_case_metadata(str(tc_path))
 
         # Resolve the per-case num_reads.  If a schedule was provided,
         # it gets the (n_nodes, n_partitions) of this case and decides;

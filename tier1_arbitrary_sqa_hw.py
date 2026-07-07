@@ -1,7 +1,7 @@
 """
 Tier-1 ARBITRARY-PARTITION sweep with S1 + S2 hardware encodings.
 
-Sibling of ``tier1_subset_sqa_hw.py``.  Same principles, same harness,
+Sibling of ``tier1_unit_sqa_hw.py``.  Same principles, same harness,
 same solver line-up -- the only structural differences are the test-bank
 directory it reads from (``arbitrary_partition`` instead of
 ``unit_partition``) and the result-file prefix (so its output does not
@@ -41,7 +41,7 @@ recoverable at full scale with instance-level statistics.
 Hyperparameters -- STARTING POINTS FOR TUNING
 ---------------------------------------------
 The annealing-time and num_reads schedules below are copied from the
-unit-partition sweep (tier1_subset_sqa_hw.py) as a starting point.
+unit-partition sweep (tier1_unit_sqa_hw.py) as a starting point.
 
 Chain strength is now FLAT (prefactor=1.5) for both S1 and S2.  The
 unit-partition sweep used a graduated S1 schedule to fight chain breaks

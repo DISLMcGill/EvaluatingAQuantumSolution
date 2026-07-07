@@ -19,7 +19,10 @@ import json
 import random
 from pathlib import Path
 
-from solvers.ILP import ILPSolver
+from util.test_generation.feasibility_probe import (
+    constraints_feasible,
+    full_optimize_feasible,
+)
 
 
 def _draw_capacity(min_cap, tightness, rng):
@@ -46,6 +49,8 @@ def generate_test_case(
     cost_range=(1, 10),
     tightness=0.5,
     feasibility_retries=20,
+    feasibility_only=False,
+    probe_time_limit=None,
 ):
     """
     Generate a random, feasible test case with variable partition sizes.
@@ -60,6 +65,14 @@ def generate_test_case(
         cost_range:            (min, max) per-partition communication costs
         tightness:             0.0 (loose) .. 1.0 (tight) -- see module docstring
         feasibility_retries:   max attempts before raising RuntimeError
+        feasibility_only:      use the scalable zero-objective feasibility
+                               probe instead of a full ILP optimize.  Leave
+                               False to preserve the legacy behaviour used by
+                               the tier-1/2 banks; set True for large
+                               instances where a full optimize is intractable.
+        probe_time_limit:      CBC wall-clock cap (seconds) for the
+                               feasibility-only probe.  Ignored when
+                               feasibility_only is False.
 
     Returns:
         dict in standard test-case JSON format.  Capacities are kept as
@@ -109,7 +122,7 @@ def generate_test_case(
         }
 
         # Verify the instance is actually feasible with an ILP probe.
-        if _is_feasible(tc):
+        if _is_feasible(tc, feasibility_only, probe_time_limit):
             return tc
 
     raise RuntimeError(
@@ -119,18 +132,16 @@ def generate_test_case(
     )
 
 
-def _is_feasible(tc):
-    """Run an ILP feasibility probe (no objective) on the given test case."""
-    requests = {
-        tuple(k[1:-1].split(", ")): v
-        for k, v in tc["requests"].items()
-    }
-    solver = ILPSolver(
-        tc["nodes"], tc["partitions"], tc["k_safety"],
-        requests, tc["comm_costs"],
-    )
-    _, result = solver.solve()
-    return result is not None
+def _is_feasible(tc, feasibility_only=False, probe_time_limit=None):
+    """Run a feasibility probe on the given test case.
+
+    feasibility_only=False -> legacy full ILP optimize probe.
+    feasibility_only=True  -> scalable zero-objective probe (optionally
+                              wall-clock capped) for large instances.
+    """
+    if feasibility_only:
+        return constraints_feasible(tc, probe_time_limit=probe_time_limit)
+    return full_optimize_feasible(tc)
 
 
 def generate_batch(

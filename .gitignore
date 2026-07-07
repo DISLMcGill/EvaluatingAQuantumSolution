@@ -14,3 +14,11 @@ EXECUTION_SUMMARY.md
 pyproject.toml
 QuantumAllocation.pdf
 REMEDIATION_PLAN.md
+.hypothesis/
+result_bank/_archive_pre_keyfix/
+result_bank/PRE_KEYFIX_AUDIT.md
+* [0-9]*.json
+pytest-cache-files-*/
+result_bank/_lean_smoke_test/
+result_bank/quantum_hardware_results/MinimalSmoke_*.json
+result_bank/quantum_hardware_results/SingleCaseBench_*.json

@@ -9,7 +9,10 @@ import json
 import random
 from pathlib import Path
 
-from solvers.ILP import ILPSolver
+from util.test_generation.feasibility_probe import (
+    constraints_feasible,
+    full_optimize_feasible,
+)
 
 
 def _draw_capacity(min_cap, tightness, rng):
@@ -29,8 +32,17 @@ def generate_unit_test_case(
     cost_range=(1, 10),
     tightness=0.5,
     feasibility_retries=20,
+    feasibility_only=False,
+    probe_time_limit=None,
 ):
-    """Generate a random feasible test case with all partition sizes = 1."""
+    """Generate a random feasible test case with all partition sizes = 1.
+
+    ``feasibility_only`` switches the per-instance check from the legacy
+    full ILP optimize to the scalable zero-objective probe; for unit
+    partitions feasibility is a simple degree/capacity question, so the
+    probe is cheap even at the hybrid-stress scale.  ``probe_time_limit``
+    caps the CBC wall clock for that probe (seconds).
+    """
     if k_safety > n_nodes:
         raise ValueError(f"k_safety ({k_safety}) cannot exceed n_nodes ({n_nodes})")
 
@@ -64,7 +76,7 @@ def generate_unit_test_case(
             "tightness":  round(tightness, 3),
         }
 
-        if _is_feasible(tc):
+        if _is_feasible(tc, feasibility_only, probe_time_limit):
             return tc
 
     raise RuntimeError(
@@ -73,17 +85,11 @@ def generate_unit_test_case(
     )
 
 
-def _is_feasible(tc):
-    """Run an ILP feasibility probe."""
-    requests = {
-        tuple(k[1:-1].split(", ")): v for k, v in tc["requests"].items()
-    }
-    solver = ILPSolver(
-        tc["nodes"], tc["partitions"], tc["k_safety"],
-        requests, tc["comm_costs"],
-    )
-    _, result = solver.solve()
-    return result is not None
+def _is_feasible(tc, feasibility_only=False, probe_time_limit=None):
+    """Run a feasibility probe (legacy full optimize, or scalable probe)."""
+    if feasibility_only:
+        return constraints_feasible(tc, probe_time_limit=probe_time_limit)
+    return full_optimize_feasible(tc)
 
 
 def generate_unit_batch(

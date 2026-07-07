@@ -66,7 +66,7 @@ def result_dir_for(hardware: bool, selection_policy: str) -> Path:
     * best_feasible  -> parallel ``*_feasible/`` directories
 
     Centralising the mapping here keeps every entrypoint (the runner,
-    single_case_hw_bench.py, tier1_subset_sqa_hw.py) in agreement on
+    single_case_hw_bench.py, tier1_unit_sqa_hw.py) in agreement on
     where results land.
     """
     if selection_policy not in VALID_POLICIES:
@@ -235,14 +235,14 @@ def _with_selection_policy(registry, selection_policy):
     The harness reads ``solver_desc.get("kwargs", {})`` and forwards it
     to the solver constructor via ``**solver_kwargs``; this helper
     targets that exact field.  ILP doesn't sample, so the kwarg would
-    be a constructor error; QPU and SQA solvers all accept it.
+    be a constructor error; QPU, SQA, and hybrid solvers all accept it.
     Centralising the injection here keeps the entrypoints
     (run_unit_experiment, bench scripts) free of per-solver dispatch.
     """
     new_registry = []
     for entry in registry:
         entry = dict(entry)  # shallow copy so callers see no mutation
-        if entry.get("type") in ("sqa", "qpu"):
+        if entry.get("type") in ("sqa", "qpu", "hybrid"):
             kwargs = dict(entry.get("kwargs") or {})
             kwargs.setdefault("selection_policy", selection_policy)
             entry["kwargs"] = kwargs
