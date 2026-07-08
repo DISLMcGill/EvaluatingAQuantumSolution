@@ -23,6 +23,9 @@ result_bank/_lean_smoke_test/
 result_bank/quantum_hardware_results/MinimalSmoke_*.json
 result_bank/quantum_hardware_results/SingleCaseBench_*.json
 
+1_untrack_junk.sh
+2_stage_and_commit.sh
+
 __pycache__/
 *.pyc
 .venv/
