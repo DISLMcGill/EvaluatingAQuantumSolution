@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the paper below."
+title: "QuantumDataAllocation"
+abstract: >-
+  A benchmark suite comparing Quantum Annealing formulations of the
+  distributed-data-allocation optimisation problem against an ILP baseline.
+authors:
+  - family-names: "Aarao Reis Arturi"
+    given-names: "Daniel"
+  - family-names: "Fahber"
+    given-names: "Emilie"
+version: 1.0.0
+date-released: "2026-07-07"
+license: MIT
+url: "https://github.com/DISLMcGill/EvaluatingAQuantumSolution"
+# doi: 10.5281/zenodo.XXXXXXX   # add after archiving a snapshot on Zenodo
+preferred-citation:
+  type: conference-paper
+  title: "Evaluating a Quantum Solution: How Hard Can It Be?"
+  authors:
+    - family-names: "Aarao Reis Arturi"
+      given-names: "Daniel"
+    - family-names: "Fahber"
+      given-names: "Emilie"
+    - family-names: "Scherzinger"
+      given-names: "Stefanie"
+    - family-names: "Kemme"
+      given-names: "Bettina"
+  collection-title: >-
+    Proceedings of the 2nd Workshop on Quantum Computing and
+    Data/Knowledge Management (QC&DKM 2026), co-located with VLDB 2026
+  year: 2026
+  notes: "To appear"

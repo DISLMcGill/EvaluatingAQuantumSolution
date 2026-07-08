@@ -306,6 +306,38 @@ analysis notebooks read `tc_tightness` to stratify metrics by
 storage-constraint tightness without re-opening the source test
 cases.
 
+## Citation
+
+If you use this code, please cite the accompanying paper:
+
+```bibtex
+@inproceedings{arturi2026evaluating,
+  author    = {Aarao Reis Arturi, Daniel and Fahber, Emilie and
+               Scherzinger, Stefanie and Kemme, Bettina},
+  title     = {Evaluating a Quantum Solution: How Hard Can It Be?},
+  booktitle = {Proceedings of the 2nd Workshop on Quantum Computing and
+               Data/Knowledge Management (QC\&DKM 2026), co-located with
+               VLDB 2026},
+  year      = {2026},
+}
+```
+
+To cite the software artifact directly:
+
+```bibtex
+@software{arturi2026quantumdataallocation,
+  author  = {Aarao Reis Arturi, Daniel and Fahber, Emilie},
+  title   = {{QuantumDataAllocation}: A benchmark suite for quantum-annealing
+             formulations of distributed data allocation},
+  year    = {2026},
+  url     = {https://github.com/DISLMcGill/EvaluatingAQuantumSolution},
+  version = {1.0.0},
+}
+```
+
+A machine-readable `CITATION.cff` is also provided at the repository root,
+which GitHub surfaces via the **"Cite this repository"** button.
+
 ## References
 
 - Trummer, I. (2025). "Leveraging Quantum Computing for Optimal Data
